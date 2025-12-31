@@ -72,7 +72,7 @@ const mockPeriods = [
 ];
 
 // ==================== COMPONENTS ====================
-const Sidebar = ({ activeMenu, setActiveMenu, isOpen, setIsOpen }) => {
+const Sidebar = ({ activeMenu, setActiveMenu, isOpen, setIsOpen }: { activeMenu: string; setActiveMenu: (id: string) => void; isOpen: boolean; setIsOpen: (open: boolean) => void }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'employees', label: 'Employees', icon: Users },
