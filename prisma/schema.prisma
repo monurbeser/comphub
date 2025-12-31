@@ -1,0 +1,345 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== TENANT MANAGEMENT ====================
+
+model Tenant {
+  id            String   @id @default(uuid())
+  name          String
+  subdomain     String   @unique
+  planType      String   @default("lite") // lite, professional, enterprise
+  maxEmployees  Int      @default(25)
+  isActive      Boolean  @default(true)
+  settings      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  users                    User[]
+  departments              Department[]
+  positions                Position[]
+  titles                   Title[]
+  employees                Employee[]
+  competencyGroups         CompetencyGroup[]
+  competencies             Competency[]
+  gradingScales            GradingScale[]
+  skillMatrices            SkillMatrix[]
+  evaluationPeriods        EvaluationPeriod[]
+  employeeCompetencyValues EmployeeCompetencyValue[]
+
+  @@map("tenants")
+}
+
+// ==================== USER & AUTH ====================
+
+model User {
+  id            String   @id @default(uuid())
+  tenantId      String
+  email         String   
+  passwordHash  String
+  firstName     String
+  lastName      String
+  role          String   @default("user") // admin, manager, user
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee      Employee?
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+// ==================== ORGANIZATION STRUCTURE ====================
+
+model Department {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  name               String
+  code               String?
+  parentDepartmentId String?
+  description        String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  tenant             Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parentDepartment   Department? @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id])
+  childDepartments   Department[] @relation("DepartmentHierarchy")
+  employees          Employee[]
+  skillMatrices      SkillMatrix[]
+
+  @@unique([tenantId, code])
+  @@map("departments")
+}
+
+model Position {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  code        String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employees   Employee[]
+
+  @@unique([tenantId, code])
+  @@map("positions")
+}
+
+model Title {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  code        String?
+  level       Int?     @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employees   Employee[]
+
+  @@unique([tenantId, code])
+  @@map("titles")
+}
+
+model Employee {
+  id              String    @id @default(uuid())
+  tenantId        String
+  employeeCode    String?
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  departmentId    String?
+  positionId      String?
+  titleId         String?
+  managerId       String?
+  userId          String?   @unique
+  jobStartDate    DateTime?
+  birthDate       DateTime?
+  gender          String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  department      Department? @relation(fields: [departmentId], references: [id])
+  position        Position?   @relation(fields: [positionId], references: [id])
+  title           Title?      @relation(fields: [titleId], references: [id])
+  manager         Employee?   @relation("EmployeeManager", fields: [managerId], references: [id])
+  subordinates    Employee[]  @relation("EmployeeManager")
+  user            User?       @relation(fields: [userId], references: [id])
+  
+  competencyValues EmployeeCompetencyValue[]
+  matrixEmployees  SkillMatrixEmployee[]
+
+  @@unique([tenantId, employeeCode])
+  @@map("employees")
+}
+
+// ==================== COMPETENCY MANAGEMENT ====================
+
+model CompetencyGroup {
+  id            String   @id @default(uuid())
+  tenantId      String
+  name          String
+  code          String?
+  description   String?
+  gradingScaleId String?
+  color         String?  @default("#3b82f6")
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  gradingScale  GradingScale? @relation(fields: [gradingScaleId], references: [id])
+  competencies  Competency[]
+
+  @@unique([tenantId, code])
+  @@map("competency_groups")
+}
+
+model Competency {
+  id               String   @id @default(uuid())
+  tenantId         String
+  competencyGroupId String
+  name             String
+  code             String?
+  description      String?
+  targetValue      Int?     @default(3)
+  sortOrder        Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  competencyGroup  CompetencyGroup  @relation(fields: [competencyGroupId], references: [id])
+  
+  matrixCompetencies SkillMatrixCompetency[]
+  employeeValues     EmployeeCompetencyValue[]
+
+  @@unique([tenantId, code])
+  @@map("competencies")
+}
+
+model GradingScale {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  minValue    Int      @default(1)
+  maxValue    Int      @default(5)
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  levels           GradingLevel[]
+  competencyGroups CompetencyGroup[]
+
+  @@map("grading_scales")
+}
+
+model GradingLevel {
+  id             String   @id @default(uuid())
+  gradingScaleId String
+  value          Int
+  label          String
+  description    String?
+  color          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  gradingScale   GradingScale @relation(fields: [gradingScaleId], references: [id], onDelete: Cascade)
+
+  @@unique([gradingScaleId, value])
+  @@map("grading_levels")
+}
+
+// ==================== SKILL MATRIX ====================
+
+model SkillMatrix {
+  id              String   @id @default(uuid())
+  tenantId        String
+  name            String
+  departmentId    String?
+  evaluationFrequency String @default("quarterly") // monthly, quarterly, semi-annual, annual
+  description     String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  tenant          Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  department      Department?  @relation(fields: [departmentId], references: [id])
+  
+  competencies    SkillMatrixCompetency[]
+  employees       SkillMatrixEmployee[]
+
+  @@map("skill_matrices")
+}
+
+model SkillMatrixCompetency {
+  id            String   @id @default(uuid())
+  skillMatrixId String
+  competencyId  String
+  sortOrder     Int      @default(0)
+  targetValue   Int?
+  createdAt     DateTime @default(now())
+
+  // Relations
+  skillMatrix   SkillMatrix @relation(fields: [skillMatrixId], references: [id], onDelete: Cascade)
+  competency    Competency  @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([skillMatrixId, competencyId])
+  @@map("skill_matrix_competencies")
+}
+
+model SkillMatrixEmployee {
+  id            String   @id @default(uuid())
+  skillMatrixId String
+  employeeId    String
+  createdAt     DateTime @default(now())
+
+  // Relations
+  skillMatrix   SkillMatrix @relation(fields: [skillMatrixId], references: [id], onDelete: Cascade)
+  employee      Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([skillMatrixId, employeeId])
+  @@map("skill_matrix_employees")
+}
+
+// ==================== EVALUATION ====================
+
+model EvaluationPeriod {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  code        String   // e.g., "2024-Q1", "2024-01"
+  periodType  String   @default("quarterly") // monthly, quarterly, semi-annual, annual
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean  @default(true)
+  isClosed    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  evaluations EmployeeCompetencyValue[]
+
+  @@unique([tenantId, code])
+  @@map("evaluation_periods")
+}
+
+model EmployeeCompetencyValue {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  employeeId          String
+  competencyId        String
+  evaluationPeriodId  String
+  targetValue         Int?
+  actualValue         Int?
+  notes               String?
+  evaluatedBy         String?
+  evaluatedAt         DateTime?
+  isArchived          Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee           Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  competency         Competency       @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+  evaluationPeriod   EvaluationPeriod @relation(fields: [evaluationPeriodId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, competencyId, evaluationPeriodId])
+  @@map("employee_competency_values")
+}
