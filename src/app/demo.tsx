@@ -1,4 +1,9 @@
 import React, { useState } from 'react';
+import CompetencyHubApp from './demo'
+
+export default function Home() {
+  return <CompetencyHubApp />
+}
 import { 
   LayoutDashboard, Users, Building2, Briefcase, Award, 
   Grid3X3, FileBarChart, Settings, LogOut, Menu, X,
